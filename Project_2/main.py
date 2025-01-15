@@ -9,11 +9,20 @@ from pydantic import BaseModel, Field  # Pydantic for data validation:
     # BaseModel - base class for request/response models
     # Field - for detailed field validation
 from starlette import status  # HTTP status codes for responses
+from fastapi.middleware.cors import CORSMiddleware
 
 # Initialize the FastAPI application instance
 # This creates the core application object that handles all API functionality
 app = FastAPI()
 
+# 2. Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Define the Book class that represents our core data structure
 # This is a regular Python class (not a Pydantic model) used for storing book data
@@ -56,10 +65,7 @@ class BookRequest(BaseModel):
         gt=0,
         lt=6  # Rating must be between 1-5
     )
-    published_date: int = Field(
-        gt=1999,
-        lt=2031  # Publication year must be between 2000-2030
-    )
+    published_date: int = Field(gt=1999 , lt = 2024)
 
     # Configuration for API documentation
     # Provides an example of valid book data in the Swagger UI
@@ -70,11 +76,15 @@ class BookRequest(BaseModel):
                 "author": "codingwithroby",
                 "description": "A new description of a book",
                 "rating": 5,
-                'published_date': 2029
+                "published_date":2024
             }
         }
     }
         
+
+
+
+
 
 
 # In-memory database of books
@@ -97,16 +107,40 @@ async def read_all_books():
     return BOOKS  # Simply returns the entire BOOKS list
 
 
-# GET endpoint to retrieve a specific book by ID
-# Path parameter validation ensures book_id is positive
+@app.get("/books/published_year/{year}", status_code=status.HTTP_200_OK)
+async def get_books_by_years(year: int):
+    books_to_return = []
+    for book in BOOKS:
+        if book.published_date == year:
+            books_to_return.append(book)
+    if not books_to_return:
+        raise HTTPException(status_code=404, detail='No books found for this year')
+    return books_to_return
+@app.get("/books/published_year/{year}")
+async def get_books_by_years(year:int ):
+    for i in BOOKS:
+        if i.published_date == year:
+            return i
+    raise HTTPException(status_code=404, detail='Item not found')
+
 @app.get("/books/{book_id}", status_code=status.HTTP_200_OK)
 async def read_book(book_id: int = Path(gt=0)):
-    # Search through books to find matching ID
     for book in BOOKS:
         if book.id == book_id:
-            return book
-    # If book not found, raise 404 error
+            return book 
     raise HTTPException(status_code=404, detail='Item not found')
+
+
+# GET endpoint to retrieve a specific book by ID
+# Path parameter validation ensures book_id is positive
+# @app.get("/books/{book_id}", status_code=status.HTTP_200_OK)
+# async def read_book(book_id: int = Path(gt=0)):
+#     # Search through books to find matching ID
+#             return book
+#     for book in BOOKS:
+#         if book.id == book_id:
+#     # If book not found, raise 404 error
+#     raise HTTPException(status_code=404, detail='Item not found')
 
 
 # GET endpoint to retrieve books by rating
@@ -121,17 +155,6 @@ async def read_book_by_rating(book_rating: int = Query(gt=0, lt=6)):
     return books_to_return
 
 
-# GET endpoint to retrieve books by publication date
-# Query parameter validation ensures year is between 2000-2030
-@app.get("/books/publish/", status_code=status.HTTP_200_OK)
-async def read_books_by_publish_date(published_date: int = Query(gt=1999, lt=2031)):
-    books_to_return = []
-    # Filter books by matching publication date
-    for book in BOOKS:
-        if book.published_date == published_date:
-            books_to_return.append(book)
-    return books_to_return
-
 
 # POST endpoint to create a new book
 # Returns 201 Created status code on success
@@ -143,7 +166,6 @@ async def create_book(book_request: BookRequest):
     # Add book to list after generating ID
     BOOKS.append(find_book_id(new_book))
 
-
 # Helper function to generate a new book ID
 # Takes a Book object and sets its ID based on existing books
 def find_book_id(book: Book):
@@ -152,19 +174,46 @@ def find_book_id(book: Book):
     return book
 
 
-# PUT endpoint to update an existing book
-# Returns 204 No Content status code on success
-@app.put("/books/update_book", status_code=status.HTTP_204_NO_CONTENT)
-async def update_book(book: BookRequest):
-    book_changed = False
-    # Search for book by ID and update if found
+@app.get("books/update_book")
+async def update_book(book:BookRequest):
     for i in range(len(BOOKS)):
-        if BOOKS[i].id == book.id:
-            BOOKS[i] = book
-            book_changed = True
-    # Raise 404 error if book not found
+        if BOOKS[i].id==book.id:
+            BOOKS[i]=book
+            book_changed=True
+            break
     if not book_changed:
         raise HTTPException(status_code=404, detail='Item not found')
+
+
+
+# # PUT endpoint to update an existing book
+# # Returns 204 No Content status code on success
+# @app.put("/books/update_book", status_code=status.HTTP_204_NO_CONTENT)
+# async def update_book(book: BookRequest):
+#     book_changed = False
+#     # Search for book by ID and update if found
+#     for i in range(len(BOOKS)):
+#         if BOOKS[i].id == book.id:
+#             BOOKS[i] = book
+#             book_changed = True
+#     # Raise 404 error if book not found
+#     if not book_changed:
+#         raise HTTPException(status_code=404, detail='Item not found')
+
+
+@app.put("books/update_book")
+async def update_book(book:BookRequest):
+    for i in range(len(BOOKS)):
+        if BOOKS[i].id==book.id:
+            BOOKS[i]=book
+            book_changed=True
+            break
+    if not book_changed:
+        raise HTTPException(status_code=404, detail='Item not found')
+
+
+
+
 
 
 # DELETE endpoint to remove a book
@@ -181,3 +230,21 @@ async def delete_book(book_id: int = Path(gt=0)):
     # Raise 404 error if book not found
     if not book_changed:
         raise HTTPException(status_code=404, detail='Item not found')
+
+
+
+
+
+
+
+
+
+
+def main():
+    import uvicorn
+    # Change host to "127.0.0.1" instead of "0.0.0.0" for local development
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
+
+if __name__ == "__main__":
+    main()
